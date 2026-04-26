@@ -1,3 +1,14 @@
+### 13.0.0
+
+- Foundry v13 compatibility (fork: tmancino/foundryvtt-border-control)
+- Convert ApplicationV2 hook handlers (`renderTokenConfig`, `renderTokenHUD`, `renderSettingsConfig`) to native HTMLElement DOM
+- Migrate `Dialog` → `foundry.applications.api.DialogV2` for the custom-color picker
+- Replace removed `canvas.grid.grid.getPolygon(...)` with v13 `canvas.grid.getShape()` for hex-grid borders
+- Namespace `renderTemplate` → `foundry.applications.handlebars.renderTemplate`
+- Namespace `Color.from` → `foundry.utils.Color.from`
+- Switch border refresh to `token.renderFlags.set({ refreshBorder: true })` (v13 idiomatic)
+- libWrapper overrides on `Token.prototype._refreshBorder` / `_getBorderColor` retained — those methods still exist on v13
+
 ### 12.0.2
 
 - Add zoomScaling feature https://github.com/p4535992/foundryvtt-border-control

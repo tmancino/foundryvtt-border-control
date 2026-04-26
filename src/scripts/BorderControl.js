@@ -170,16 +170,19 @@ export class BorderFrame {
      * @param {JQuery} html
      */
     static async renderTokenConfigHandler(tokenConfig, html) {
-        // if (!tokenConfig.token.hasPlayerOwner) {
-        //   return;
-        // }
         if (!html) {
             return;
         }
 
+        // v13 hands hooks an HTMLElement; the vendored injectConfig helper still
+        // expects jQuery internally, so wrap once at the boundary.
+        const $html = html instanceof HTMLElement ? $(html) : html;
+        const root = html instanceof HTMLElement ? html : html?.[0];
+        if (!root) return;
+
         injectConfig.inject(
             tokenConfig,
-            html,
+            $html,
             {
                 moduleId: CONSTANTS.MODULE_ID,
                 tab: {
@@ -191,7 +194,9 @@ export class BorderFrame {
             tokenConfig.object,
         );
 
-        const posTab = html.find(`.tab[data-tab="${CONSTANTS.MODULE_ID}"]`);
+        const posTab = root.querySelector(`.tab[data-tab="${CONSTANTS.MODULE_ID}"]`);
+        if (!posTab) return;
+
         const tokenFlags = tokenConfig.options.sheetConfig
             ? tokenConfig.object.flags
                 ? tokenConfig.object.flags[CONSTANTS.MODULE_ID] || {}
@@ -213,13 +218,15 @@ export class BorderFrame {
                 : 0.5,
         };
 
-        const insertHTML = await renderTemplate(`modules/${CONSTANTS.MODULE_ID}/templates/token-config.html`, data);
-        posTab.append(insertHTML);
+        const renderTpl =
+            foundry.applications?.handlebars?.renderTemplate ?? globalThis.renderTemplate;
+        const insertHTML = await renderTpl(`modules/${CONSTANTS.MODULE_ID}/templates/token-config.html`, data);
+        posTab.insertAdjacentHTML("beforeend", insertHTML);
     }
 
     // START NEW MANAGE
 
-    static AddBorderToggle(app, html, data) {
+    static AddBorderToggle(app, html) {
         if (!game.user?.isGM) {
             return;
         }
@@ -230,42 +237,46 @@ export class BorderFrame {
             return;
         }
 
+        // v13: html is HTMLElement on AppV2; v12 still passed jQuery — handle both.
+        const root = html instanceof HTMLElement ? html : html?.[0];
+        if (!root) return;
+
         const borderControlDisableFlag = app.object.document.getFlag(
             CONSTANTS.MODULE_ID,
             CONSTANTS.FLAGS.BORDER_DISABLE,
         );
 
-        const borderButton = `
-    <div class="control-icon borderControlBorder
-      ${borderControlDisableFlag ? "active" : ""}"
-      title="Toggle Border Controller"> <i class="fas fa-border-style"></i>
-    </div>`;
+        const settingHudColClass = (game.settings.get(CONSTANTS.MODULE_ID, "hudColumn") ?? "right").toLowerCase();
+        const settingHudTopBottomClass = (game.settings.get(CONSTANTS.MODULE_ID, "hudTopBottom") ?? "bottom").toLowerCase();
 
-        const settingHudColClass = game.settings.get(CONSTANTS.MODULE_ID, "hudColumn") ?? "right";
-        const settingHudTopBottomClass = game.settings.get(CONSTANTS.MODULE_ID, "hudTopBottom") ?? "bottom";
+        const col = root.querySelector(`.${settingHudColClass}`);
+        if (!col) return;
 
-        const buttonPos = "." + settingHudColClass.toLowerCase();
+        const button = document.createElement("div");
+        button.className = `control-icon borderControlBorder${borderControlDisableFlag ? " active" : ""}`;
+        button.title = "Toggle Border Controller";
+        button.innerHTML = `<i class="fas fa-border-style"></i>`;
 
-        const col = html.find(buttonPos);
-        if (settingHudTopBottomClass.toLowerCase() === "top") {
-            col.prepend(borderButton);
+        if (settingHudTopBottomClass === "top") {
+            col.prepend(button);
         } else {
-            col.append(borderButton);
+            col.appendChild(button);
         }
 
-        html.find(".borderControlBorder").click(this.ToggleBorder.bind(app));
-        html.find(".borderControlBorder").contextmenu(this.ToggleCustomBorder.bind(app));
+        button.addEventListener("click", this.ToggleBorder.bind(app));
+        button.addEventListener("contextmenu", this.ToggleCustomBorder.bind(app));
     }
 
     static async ToggleBorder(event) {
         const borderIsDisabled = this.object.document.getFlag(CONSTANTS.MODULE_ID, CONSTANTS.FLAGS.BORDER_DISABLE);
 
-        for (const token of canvas.tokens?.controlled) {
+        for (const token of canvas.tokens?.controlled ?? []) {
             try {
                 await token.document.setFlag(CONSTANTS.MODULE_ID, CONSTANTS.FLAGS.BORDER_DISABLE, !borderIsDisabled);
-                token.refresh();
+                // v13 idiom: schedule a border-only refresh through the render-flags pipeline.
+                token.renderFlags?.set({ refreshBorder: true }) ?? token.refresh();
             } catch (e) {
-                error(e);
+                Logger.error(e);
             }
         }
 
@@ -274,108 +285,103 @@ export class BorderFrame {
 
     static async ToggleCustomBorder(event) {
         const tokenTmp = this.object;
+        const flag = (k) => tokenTmp.document.getFlag(CONSTANTS.MODULE_ID, k);
 
-        const currentCustomColorTokenInt =
-            tokenTmp.document.getFlag(CONSTANTS.MODULE_ID, CONSTANTS.FLAGS.BORDER_CUSTOM_COLOR_INT) || "#000000";
-
-        const currentCustomColorTokenExt =
-            tokenTmp.document.getFlag(CONSTANTS.MODULE_ID, CONSTANTS.FLAGS.BORDER_CUSTOM_COLOR_EXT) || "#000000";
-
-        const currentCustomColorTokenFrameOpacity = isRealNumber(
-            tokenTmp.document.getFlag(CONSTANTS.MODULE_ID, CONSTANTS.FLAGS.BORDER_CUSTOM_FRAME_OPACITY),
-        )
-            ? tokenTmp.document.getFlag(CONSTANTS.MODULE_ID, CONSTANTS.FLAGS.BORDER_CUSTOM_FRAME_OPACITY)
+        const currentCustomColorTokenInt = flag(CONSTANTS.FLAGS.BORDER_CUSTOM_COLOR_INT) || "#000000";
+        const currentCustomColorTokenExt = flag(CONSTANTS.FLAGS.BORDER_CUSTOM_COLOR_EXT) || "#000000";
+        const currentCustomColorTokenFrameOpacity = isRealNumber(flag(CONSTANTS.FLAGS.BORDER_CUSTOM_FRAME_OPACITY))
+            ? flag(CONSTANTS.FLAGS.BORDER_CUSTOM_FRAME_OPACITY)
             : 0.5;
-
-        const currentCustomColorTokenBaseOpacity = isRealNumber(
-            tokenTmp.document.getFlag(CONSTANTS.MODULE_ID, CONSTANTS.FLAGS.BORDER_CUSTOM_BASE_OPACITY),
-        )
-            ? tokenTmp.document.getFlag(CONSTANTS.MODULE_ID, CONSTANTS.FLAGS.BORDER_CUSTOM_BASE_OPACITY)
+        const currentCustomColorTokenBaseOpacity = isRealNumber(flag(CONSTANTS.FLAGS.BORDER_CUSTOM_BASE_OPACITY))
+            ? flag(CONSTANTS.FLAGS.BORDER_CUSTOM_BASE_OPACITY)
             : 0.5;
 
         const dialogContent = `
       <div class="form-group">
         <label>${Logger.i18n("Border-Control.label.borderControlCustomColorTokenInt")}</label>
-        <input type="color"
-          value="${currentCustomColorTokenInt}"
-          data-edit="Border-Control.currentCustomColorTokenInt"></input>
+        <input type="color" name="customColorInt" value="${currentCustomColorTokenInt}">
       </div>
       <div class="form-group">
         <label>${Logger.i18n("Border-Control.label.borderControlCustomColorTokenExt")}</label>
-        <input type="color"
-          value="${currentCustomColorTokenExt}"
-          data-edit="Border-Control.currentCustomColorTokenExt"></input>
+        <input type="color" name="customColorExt" value="${currentCustomColorTokenExt}">
       </div>
       <div class="form-group">
         <label>${Logger.i18n("Border-Control.label.borderControlCustomColorTokenFrameOpacity")}</label>
-        <input type="number"
-          min="0" max="1" step="0.1"
-          value="${currentCustomColorTokenFrameOpacity}"
-          data-edit="Border-Control.currentCustomColorTokenFrameOpacity"></input>
+        <input type="number" name="customFrameOpacity" min="0" max="1" step="0.1" value="${currentCustomColorTokenFrameOpacity}">
       </div>
       <div class="form-group">
         <label>${Logger.i18n("Border-Control.label.borderControlCustomColorTokenBaseOpacity")}</label>
-        <input type="number"
-          min="0" max="1" step="0.1"
-          value="${currentCustomColorTokenBaseOpacity}"
-          data-edit="Border-Control.currentCustomColorTokenBaseOpacity"></input>
+        <input type="number" name="customBaseOpacity" min="0" max="1" step="0.1" value="${currentCustomColorTokenBaseOpacity}">
       </div>
       `;
 
-        const d = new Dialog({
+        const DialogV2 = foundry.applications?.api?.DialogV2;
+        if (DialogV2) {
+            let result = null;
+            try {
+                result = await DialogV2.wait({
+                    window: { title: Logger.i18n("Border-Control.label.chooseCustomColorToken") },
+                    content: dialogContent,
+                    rejectClose: false,
+                    buttons: [
+                        {
+                            action: "yes",
+                            label: Logger.i18n("Border-Control.label.applyCustomColor"),
+                            callback: (ev, button, dialog) => {
+                                const root = dialog.element;
+                                const get = (n) => root.querySelector(`input[name="${n}"]`)?.value;
+                                return {
+                                    int: get("customColorInt"),
+                                    ext: get("customColorExt"),
+                                    frame: get("customFrameOpacity"),
+                                    base: get("customBaseOpacity"),
+                                };
+                            },
+                        },
+                        {
+                            action: "no",
+                            label: Logger.i18n("Border-Control.label.doNothing"),
+                            default: true,
+                            callback: () => null,
+                        },
+                    ],
+                });
+            } catch (e) {
+                // dialog dismissed
+                return;
+            }
+            if (!result) return;
+            for (const token of canvas.tokens?.controlled ?? []) {
+                await token.document.setFlag(CONSTANTS.MODULE_ID, CONSTANTS.FLAGS.BORDER_CUSTOM_COLOR_INT, result.int);
+                await token.document.setFlag(CONSTANTS.MODULE_ID, CONSTANTS.FLAGS.BORDER_CUSTOM_COLOR_EXT, result.ext);
+                await token.document.setFlag(CONSTANTS.MODULE_ID, CONSTANTS.FLAGS.BORDER_CUSTOM_FRAME_OPACITY, result.frame);
+                await token.document.setFlag(CONSTANTS.MODULE_ID, CONSTANTS.FLAGS.BORDER_CUSTOM_BASE_OPACITY, result.base);
+            }
+            return;
+        }
+
+        // Fallback: legacy Dialog (v12 path)
+        new Dialog({
             title: Logger.i18n("Border-Control.label.chooseCustomColorToken"),
             content: dialogContent,
             buttons: {
                 yes: {
                     label: Logger.i18n("Border-Control.label.applyCustomColor"),
-
                     callback: async (html) => {
-                        const newCurrentCustomColorTokenInt = $(
-                            html.find(`input[data-edit='Border-Control.currentCustomColorTokenInt']`)[0],
-                        ).val();
-                        const newCurrentCustomColorTokenExt = $(
-                            html.find(`input[data-edit='Border-Control.currentCustomColorTokenExt']`)[0],
-                        ).val();
-                        const newCurrentCustomColorTokenFrameOpacity = $(
-                            html.find(`input[data-edit='Border-Control.currentCustomColorTokenFrameOpacity']`)[0],
-                        ).val();
-                        const newCurrentCustomColorTokenBaseOpacity = $(
-                            html.find(`input[data-edit='Border-Control.currentCustomColorTokenBaseOpacity']`)[0],
-                        ).val();
-                        for (const token of canvas.tokens?.controlled) {
-                            token.document.setFlag(
-                                CONSTANTS.MODULE_ID,
-                                CONSTANTS.FLAGS.BORDER_CUSTOM_COLOR_INT,
-                                newCurrentCustomColorTokenInt,
-                            );
-                            token.document.setFlag(
-                                CONSTANTS.MODULE_ID,
-                                CONSTANTS.FLAGS.BORDER_CUSTOM_COLOR_EXT,
-                                newCurrentCustomColorTokenExt,
-                            );
-                            token.document.setFlag(
-                                CONSTANTS.MODULE_ID,
-                                CONSTANTS.FLAGS.BORDER_CUSTOM_FRAME_OPACITY,
-                                newCurrentCustomColorTokenFrameOpacity,
-                            );
-                            token.document.setFlag(
-                                CONSTANTS.MODULE_ID,
-                                CONSTANTS.FLAGS.BORDER_CUSTOM_BASE_OPACITY,
-                                newCurrentCustomColorTokenBaseOpacity,
-                            );
+                        const root = html instanceof HTMLElement ? html : html?.[0];
+                        const get = (n) => root?.querySelector(`input[name="${n}"]`)?.value;
+                        for (const token of canvas.tokens?.controlled ?? []) {
+                            await token.document.setFlag(CONSTANTS.MODULE_ID, CONSTANTS.FLAGS.BORDER_CUSTOM_COLOR_INT, get("customColorInt"));
+                            await token.document.setFlag(CONSTANTS.MODULE_ID, CONSTANTS.FLAGS.BORDER_CUSTOM_COLOR_EXT, get("customColorExt"));
+                            await token.document.setFlag(CONSTANTS.MODULE_ID, CONSTANTS.FLAGS.BORDER_CUSTOM_FRAME_OPACITY, get("customFrameOpacity"));
+                            await token.document.setFlag(CONSTANTS.MODULE_ID, CONSTANTS.FLAGS.BORDER_CUSTOM_BASE_OPACITY, get("customBaseOpacity"));
                         }
                     },
                 },
-                no: {
-                    label: Logger.i18n("Border-Control.label.doNothing"),
-                    callback: (html) => {
-                        // Do nothing
-                    },
-                },
+                no: { label: Logger.i18n("Border-Control.label.doNothing"), callback: () => {} },
             },
             default: "no",
-        });
-        d.render(true);
+        }).render(true);
     }
 
     static _clamp(value, max, min) {
@@ -702,7 +708,7 @@ export class BorderFrame {
             token.border
                 .lineStyle({
                     width: t * nBS,
-                    color: Color.from(borderColor.EX),
+                    color: foundry.utils.Color.from(borderColor.EX),
                     alignment: 0.75,
                     join: PIXI.LINE_JOIN.ROUND,
                 })
@@ -711,55 +717,36 @@ export class BorderFrame {
             token.border
                 .lineStyle({
                     width: h * nBS,
-                    color: Color.from(borderColor.INT),
+                    color: foundry.utils.Color.from(borderColor.INT),
                     alignment: 1.0,
                     join: PIXI.LINE_JOIN.ROUND,
                 })
                 //.drawCircle(token.x + token.w / 2, token.y + token.h / 2, (token.w / 2) * sX + h + t / 2 + p);
                 .drawCircle(-token.center.x + token.w, -token.center.y + token.h, (token.w / 2) * s + h + t / 2 + p);
         } else if (canvas.grid.isHexagonal || hexTypes.includes(canvas.grid?.type)) {
-            // && token.width === 1 && token.height === 1)) {
-            // const p = game.settings.get(CONSTANTS.MODULE_ID, "borderOffset");
-            const q = Math.round(p / 2);
+            // v13: canvas.grid.grid.getPolygon(...) was removed when canvas.grid became
+            // BaseGrid directly. token.shape is a PIXI.Polygon already sized to the hex
+            // (and for multi-size hex tokens too), so draw it directly.
+            const shape = token.shape;
+            if (shape) {
+                token.border
+                    .lineStyle({
+                        width: t * nBS,
+                        color: foundry.utils.Color.from(borderColor.EX),
+                        alignment: 0.75,
+                        join: PIXI.LINE_JOIN.ROUND,
+                    })
+                    .drawShape(shape);
 
-            // Should be able to use getBorderPolygon or replaced method after https://github.com/foundryvtt/foundryvtt/issues/10088 is released?
-            // Until then only works when width and height are the same
-            /*const polygon =
-        token.document.width === token.document.height
-          ? canvas.grid?.grid?.getBorderPolygon(token.document.width, token.document.height, q)
-          //: canvas.grid?.grid?.getPolygon(-1.5 - q + sW, -1.5 - q + sH, (token.w + 2) * sX + p, (token.h + 2) * sY + p);
-          : canvas.grid?.grid?.getPolygon(-token.x, -token.y, (token.w + 2) * sX + p, (token.h + 2) * sY + p); */
-
-            /*const polygon = canvas.grid?.grid?.getPolygon(
-       	-1.5 - q + sW,
-       	-1.5 - q + sH,
-       	(token.w + 2) * s + p,
-       	(token.h + 2) * s + p
-       );*/
-            const polygon = canvas.grid?.grid?.getPolygon(
-                -token.x,
-                -token.y,
-                (token.w + 2) * s + p,
-                (token.h + 2) * s + p,
-            );
-
-            token.border
-                .lineStyle({
-                    width: t * nBS,
-                    color: Color.from(borderColor.EX),
-                    alignment: 0.75,
-                    join: PIXI.LINE_JOIN.ROUND,
-                })
-                .drawPolygon(polygon);
-
-            token.border
-                .lineStyle({
-                    width: (t * nBS) / 2,
-                    color: Color.from(borderColor.INT),
-                    alignment: 1.0,
-                    join: PIXI.LINE_JOIN.ROUND,
-                })
-                .drawPolygon(polygon);
+                token.border
+                    .lineStyle({
+                        width: (t * nBS) / 2,
+                        color: foundry.utils.Color.from(borderColor.INT),
+                        alignment: 1.0,
+                        join: PIXI.LINE_JOIN.ROUND,
+                    })
+                    .drawShape(shape);
+            }
         }
 
         // Otherwise Draw Square border
@@ -773,7 +760,7 @@ export class BorderFrame {
 
                 .lineStyle({
                     width: t * nBS,
-                    color: Color.from(borderColor.EX),
+                    color: foundry.utils.Color.from(borderColor.EX),
                     alignment: 0.75,
                     join: PIXI.LINE_JOIN.ROUND,
                 })
@@ -784,7 +771,7 @@ export class BorderFrame {
 
                 .lineStyle({
                     width: h * nBS,
-                    color: Color.from(borderColor.INT),
+                    color: foundry.utils.Color.from(borderColor.INT),
                     alignment: 1.0,
                     join: PIXI.LINE_JOIN.ROUND,
                 })
@@ -893,10 +880,10 @@ export class BorderFrame {
         }
 
         // const finalBorderColor = borderColor
-        //   ? Color.from(borderColor.INT)
-        //   : Color.from(CONFIG.Canvas.dispositionColors.NEUTRAL);
+        //   ? foundry.utils.Color.from(borderColor.INT)
+        //   : foundry.utils.Color.from(CONFIG.Canvas.dispositionColors.NEUTRAL);
 
-        //const finalBorderColor = borderColor ? Color.from(borderColor.INT) : Color.from(overrides.NEUTRAL.INT);
+        //const finalBorderColor = borderColor ? foundry.utils.Color.from(borderColor.INT) : foundry.utils.Color.from(overrides.NEUTRAL.INT);
         let finalBorderColor;
         if (borderColor == null || borderColor == undefined) {
             finalBorderColor = CONFIG.Canvas.dispositionColors.NEUTRAL;
@@ -940,7 +927,11 @@ export class BorderFrame {
     // }
 
     static refreshTokens() {
-        canvas.tokens.placeables.filter((t) => t.border.visible).forEach((t) => BorderFrame.refreshBorder(t));
+        for (const t of canvas.tokens.placeables) {
+            if (!t.border?.visible) continue;
+            // v13 idiom: schedule a border-only refresh; falls back to direct redraw on older cores.
+            t.renderFlags?.set({ refreshBorder: true }) ?? BorderFrame.refreshBorder(t);
+        }
     }
 
     static refreshBorder(token) {

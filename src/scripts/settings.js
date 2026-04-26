@@ -183,7 +183,7 @@ export const registerSettings = function () {
         hint: `${CONSTANTS.MODULE_ID}.setting.controlledColor.hint`,
         scope: "client",
         type: String,
-        default: Color.from(colors.CONTROLLED).css ?? "#FF9829",
+        default: foundry.utils.Color.from(colors.CONTROLLED).css ?? "#FF9829",
         config: true,
     });
 
@@ -201,7 +201,7 @@ export const registerSettings = function () {
         hint: `${CONSTANTS.MODULE_ID}.setting.hostileColor.hint`,
         scope: "client",
         type: String,
-        default: Color.from(colors.HOSTILE).css ?? "#E72124",
+        default: foundry.utils.Color.from(colors.HOSTILE).css ?? "#E72124",
         config: true,
     });
 
@@ -219,7 +219,7 @@ export const registerSettings = function () {
         hint: `${CONSTANTS.MODULE_ID}.setting.friendlyColor.hint`,
         scope: "client",
         type: String,
-        default: Color.from(colors.FRIENDLY).css ?? "#43DFDF",
+        default: foundry.utils.Color.from(colors.FRIENDLY).css ?? "#43DFDF",
         config: true,
     });
 
@@ -237,7 +237,7 @@ export const registerSettings = function () {
         hint: `${CONSTANTS.MODULE_ID}.setting.neutralColor.hint`,
         scope: "client",
         type: String,
-        default: Color.from(colors.NEUTRAL).css ?? "#F1D836",
+        default: foundry.utils.Color.from(colors.NEUTRAL).css ?? "#F1D836",
         config: true,
     });
 
@@ -255,7 +255,7 @@ export const registerSettings = function () {
         hint: `${CONSTANTS.MODULE_ID}.setting.partyColor.hint`,
         scope: "client",
         type: String,
-        default: Color.from(colors.PARTY).css ?? "#33BC4E",
+        default: foundry.utils.Color.from(colors.PARTY).css ?? "#33BC4E",
         config: true,
     });
 
@@ -273,7 +273,7 @@ export const registerSettings = function () {
         hint: `${CONSTANTS.MODULE_ID}.setting.secretColor.hint`,
         scope: "client",
         type: String,
-        default: Color.from(colors.SECRET).css ?? "#A612D4",
+        default: foundry.utils.Color.from(colors.SECRET).css ?? "#A612D4",
         config: true,
     });
 
