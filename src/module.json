@@ -22,20 +22,6 @@
         }
     ],
     "socket": true,
-    "media": [
-        {
-            "type": "icon",
-            "location": ""
-        },
-        {
-            "type": "cover",
-            "location": ""
-        },
-        {
-            "type": "screenshot",
-            "location": ""
-        }
-    ],
     "languages": [
         {
             "lang": "en",
@@ -43,32 +29,25 @@
             "path": "languages/en.json"
         }
     ],
-    "packs": [],
-    "systems": [],
-    "scripts": [],
     "esmodules": ["module.js"],
-    "styles": [],
     "compatibility": {
         "minimum": 13,
         "verified": 13,
         "maximum": 13
     },
-    "url": "https://github.com/p4535992/foundryvtt-border-control",
+    "url": "https://github.com/tmancino/foundryvtt-border-control",
     "manifest": "https://github.com/tmancino/foundryvtt-border-control/releases/download/13.0.0/module.json",
     "download": "https://github.com/tmancino/foundryvtt-border-control/releases/download/13.0.0/module.zip",
-    "readme": "https://github.com/p4535992/foundryvtt-border-control/blob/master/README.md",
-    "changelog": "https://github.com/p4535992/foundryvtt-border-control/blob/master/changelog.md",
-    "bugs": "https://github.com/p4535992/foundryvtt-border-control/issues",
+    "readme": "https://github.com/tmancino/foundryvtt-border-control/blob/master/README.md",
+    "changelog": "https://github.com/tmancino/foundryvtt-border-control/blob/master/changelog.md",
+    "bugs": "https://github.com/tmancino/foundryvtt-border-control/issues",
     "relationships": {
-        "systems": [],
         "requires": [
             {
                 "id": "lib-wrapper",
                 "type": "module",
-                "manifest": "https://github.com/ruipin/fvtt-lib-wrapper/releases/latest/download/module.json",
-                "compatibility": {}
+                "manifest": "https://github.com/ruipin/fvtt-lib-wrapper/releases/latest/download/module.json"
             }
-        ],
-        "conflicts": []
+        ]
     }
 }
